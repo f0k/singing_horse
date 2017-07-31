@@ -1,0 +1,177 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<title>Learning to Pinpoint Singing Voice from Weakly Labeled Examples (Web demo)</title>
+<style type='text/css'>
+#plot {width: 521px; margin: 0 auto; text-align: center}
+#spectbox {margin: 10px 0; position: relative}
+#spect {left: 15px; top: 0px}
+#canvas {position: absolute; left: 15px; top: 0px; opacity: 0.7}
+#label {font-size: 80%; height: 20px; text-align: center}
+#bar {position: absolute; top: -5px; left: 15px; height: 192px; width: 2px; background-color: red; opacity: 0.8}
+#prediction {position: relative; left: -15px}
+.btn {width: 30%; padding: 4px; margin: 10px; border: 1px solid #B8B8E5; background-color: #D7D7F0; cursor: default}
+.btn:hover {border-color: black}
+.btn:active {padding: 5px; margin: 9px}
+</style>
+</head>
+
+<body style="width: 770px; margin: 0 auto; background: linear-gradient(white, #E6E6FF); background-attachment: fixed; font-family: sans-serif">
+<p style="background-color: #D7D7F0; padding: 1em 0; margin-top: 0">
+<span style="background-color: #B8B8E5; padding: 1em 1em 1em 20%">Demo:</span>
+Is it a horse?
+</p>
+
+<div style="margin: 0 45px 10px">
+	<audio controls id="player" style="margin: .5em 0">
+	<source id="src_mp3" src="static/melspect.mp3" type="audio/mpeg">
+	</audio>
+	<div><b>Keybord:</b> Space bar to play/pause, left/right cursor and home/end key to jump.</div>
+	<div><b>Mouse:</b> Hold and drag to draw on spectrogram. Shift enforces horizontal lines.</div>
+	<div>Hit "Compute" button to update the audio and network prediction.</div>
+	<div>Hit "Reset" button to go back to the original audio.</div>
+</div>
+<div id="plot">
+<div id="spectbox">
+	<img id="spect" src="static/original.png" width="491" height="80"/>
+	<canvas id="canvas" width="491" height="80"></canvas>
+	<span id="bar"></span>
+</div>
+<div id="label">spectrogram of a 7-second test clip</div>
+<img id="prediction" src="static/prediction.png" width="521"/>
+<div id="label">corresponding network predictions</div>
+</div>
+<div style="margin-top: 1em; text-align: center">
+<span id="compute" class="btn">Compute</span>
+<span id="reset" class="btn">Reset</span>
+</div>
+
+<script type="text/javascript">
+// player moves red bar, mouse click sets player position
+var player = document.getElementById("player");
+var startpix = 15;
+var endpix = 15+491;
+player.addEventListener("timeupdate", function() {
+	var time = this.currentTime / this.duration;
+	document.getElementById("bar").style.left = (startpix + (endpix-startpix) * time) + 'px';
+});
+var plot = document.getElementById("plot");
+plot.addEventListener("mousedown", function(e) {
+	var pos = e.clientX - this.offsetLeft - 1;
+	var time = (pos-startpix) / (endpix-startpix);
+	if ((time > 0) && (time < 1)) {
+		player.currentTime = player.duration * time;
+	}
+});
+// drawing on canvas
+var canvas = document.getElementById("canvas"),
+	ctx = canvas.getContext("2d"),
+	draw = false,
+	lastX = 0,
+	lastY = 0,
+	penW = 2.5;
+ctx.fillStyle = "white";
+ctx.strokeStyle = "white";
+ctx.lineWidth = penW;
+ctx.lineJoin = "round";
+ctx.lineCap = "round";
+canvas.addEventListener("mousedown", function(e) {
+	e.stopPropagation();
+	lastX = e.clientX - this.offsetLeft - this.offsetParent.offsetLeft;
+	lastY = e.clientY - this.offsetTop - this.offsetParent.offsetTop;
+	draw = true;
+	ctx.beginPath();
+	ctx.arc(lastX, lastY, 0.7 * penW, 0, 2*Math.PI);
+	ctx.fill();
+	ctx.closePath();
+});
+canvas.addEventListener("mouseout", function(e) {
+	draw = false;
+});
+canvas.addEventListener("mouseup", function(e) {
+	draw = false;
+});
+canvas.addEventListener("mousemove", function(e) {
+	if (draw) {
+		var thisX = e.clientX - this.offsetLeft - this.offsetParent.offsetLeft;
+		var thisY = e.shiftKey ? lastY : e.clientY - this.offsetTop - this.offsetParent.offsetTop;
+		if ((thisX != lastX) || (thisY != lastY)) {
+			ctx.beginPath();
+			ctx.moveTo(lastX, lastY);
+			ctx.lineTo(thisX, thisY);
+			ctx.stroke();
+			ctx.closePath();
+			lastX = thisX;
+			lastY = thisY;
+		}
+	}
+});
+// Player loading function
+function load_mp3(src) {
+	player.pause();
+	document.getElementById("src_mp3").src = src;
+	player.addEventListener("loadeddata", function(e) {
+		e.target.removeEventListener(e.type, arguments.callee);
+		player.currentTime = 0;
+	});
+	player.load();
+}
+// Reset button
+document.getElementById("reset").addEventListener("click", function(e) {
+	e.preventDefault();
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	document.getElementById("prediction").src = "static/prediction.png";
+	load_mp3("static/melspect.mp3");
+});
+// Compute button
+document.getElementById("compute").addEventListener("click", function(e) {
+	e.preventDefault();
+	var btn = this;
+	btn.style.opacity = 0.7;
+	var ajax = new XMLHttpRequest();
+	ajax.onreadystatechange = function() {
+		if (ajax.readyState == 4 && ajax.status == 200) {
+			var response = ajax.responseText.split(/\r?\n/);
+			document.getElementById("prediction").src = response[0];
+			load_mp3(response[1]);
+			btn.style.opacity = 1.0;
+		}
+	}
+	ajax.open("POST", "render", true);
+	ajax.setRequestHeader('Content-Type', 'application/upload');
+	ajax.send(canvas.toDataURL());
+});
+// keyboard controls for player
+document.addEventListener("keydown", function(e) {
+	var keyCode = e.keyCode;
+	if (keyCode == 32) {  // space
+		if (player.paused) {
+			player.play();
+		}
+		else {
+			player.pause();
+		}
+		e.preventDefault();
+	}
+	else if (keyCode == 39) {  // cursor right
+	    player.currentTime = player.currentTime + 2;
+		e.preventDefault();
+	}
+	else if (keyCode == 37) {  // cursor left
+	    player.currentTime = player.currentTime - 2;
+		e.preventDefault();
+	}
+	else if (keyCode == 36) {  // home
+		player.currentTime = 0;
+		e.preventDefault();
+	}
+	else if (keyCode == 35) {  // end
+		player.currentTime = player.duration;
+		e.preventDefault();
+	}
+});
+</script>
+</body>
+</html>
