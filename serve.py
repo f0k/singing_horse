@@ -10,15 +10,22 @@ Author: Jan Schlüter
 import sys
 import os
 import base64
+import io
 try:
     from urllib import urlopen
 except ImportError:
     from urllib.request import urlopen
+if sys.version_info[0] > 2:
+    from io import BytesIO as StringIO
+else:
+    try:
+        from cStringIO import StringIO
+    except ImportError:
+        from StringIO import StringIO
 try:
-    from cStringIO import StringIO
+    import Image
 except ImportError:
-    from StringIO import StringIO
-import Image
+    from PIL import Image
 
 import bottle
 import numpy as np
@@ -33,7 +40,7 @@ app = bottle.Bottle()
 def load_config():
     here = os.path.dirname(__file__)
     config = dict()
-    with open(os.path.join(here, 'config.ini'), 'rb') as f:
+    with io.open(os.path.join(here, 'config.ini'), 'r') as f:
         for l in f:
             l = l.rstrip().split('=', 1)
             if len(l) == 2:
@@ -67,18 +74,18 @@ def render():
       the resynthesized audio, as a data URL
     """
     # Obtain and decode given image data
-    img = bottle.request.body.read()
+    img = bottle.request.body.read().decode('ascii')
     if not img:
-        bottle.response = 500
+        bottle.response.status = 500
         return 'Error: Missing img.'
     if not img.startswith('data:image/png;base64,'):
-        bottle.response = 500
+        bottle.response.status = 500
         return 'Error: Not a PNG data URL.'
+    u = urlopen(img)
     try:
-        u = urlopen(img)
         img = u.read()
     except Exception:
-        bottle.response = 500
+        bottle.response.status = 500
         return 'Error: Could not decode data URL.'
     finally:
         u.close()
@@ -86,7 +93,7 @@ def render():
         img = StringIO(img)
         img = Image.open(img)
     except Exception:
-        bottle.response = 500
+        bottle.response.status = 500
         return 'Error: Could not load given data as image.'
     # Convert to numpy array, collapse channels if any
     img = np.asarray(img)
@@ -112,8 +119,8 @@ def render():
             os.path.join(modeldir, 'std_mean.h5'))
     # Plot network predictions
     curve = plot.pred_curve(preds)
-    return ("data:image/png;base64," + base64.b64encode(curve) + "\r\n" +
-            "data:audio/mpeg;base64," + base64.b64encode(audio))
+    return ("data:image/png;base64," + base64.b64encode(curve).decode('ascii') + "\r\n" +
+            "data:audio/mpeg;base64," + base64.b64encode(audio).decode('ascii'))
 
 
 # Expose to mod_wsgi (we just need a global object called 'application'):
@@ -122,9 +129,9 @@ application = app
 # Run as an internal server when this script is started directly:
 def main():
     if len(sys.argv) > 1:
-        print "Serves the demo. Needs bottle.py to run. Will serve via bjoern"
-        print "if installed, otherwise via wsgi_ref. Reads its configuration "
-        print "from config.ini."
+        print("Serves the demo. Needs bottle.py to run. Will serve via bjoern")
+        print("if installed, otherwise via wsgi_ref. Reads its configuration ")
+        print("from config.ini.")
         return
 
     # load configuration
@@ -132,7 +139,7 @@ def main():
     staticdir = os.path.join(os.path.dirname(__file__), 'static')
 
     # start web server
-    print "Starting web server on localhost:%d..." % port
+    print("Starting web server on localhost:%d..." % port)
     app.route('/static/:path#.+#', callback=lambda path:
             bottle.static_file(path, root=staticdir))
     try:

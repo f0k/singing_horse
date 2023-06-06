@@ -10,10 +10,13 @@ Author: Jan Schlüter
 """
 import sys
 import os
-try:
-    from cStringIO import StringIO
-except:
-    from StringIO import StringIO
+if sys.version_info[0] > 2:
+    from io import BytesIO as StringIO
+else:
+    try:
+        from cStringIO import StringIO
+    except:
+        from StringIO import StringIO
 
 import numpy as np
 import matplotlib; matplotlib.use('Agg')
@@ -48,10 +51,10 @@ def pred_curve(data, ymax=1.0, format='png', outfile=None):
         return f.getvalue()
 
 def print_usage():
-    print 'Plots a prediction curve.'
-    print 'Usage: %s INFILE OUTFILE' % sys.argv[0]
-    print '  INFILE: .npy input file or a just number giving the length'
-    print '  OUTFILE: graphics file to write'
+    print('Plots a prediction curve.')
+    print('Usage: %s INFILE OUTFILE' % sys.argv[0])
+    print('  INFILE: .npy input file or a just number giving the length')
+    print('  OUTFILE: graphics file to write')
 
 def main():
     if len(sys.argv) < 3:

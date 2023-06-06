@@ -7,12 +7,13 @@ Applies a trained CNN to given input data.
 Author: Jan Schlüter
 """
 
+import io
 import sys
 import h5py
 import numpy as np
 import scipy.signal
 import scipy.ndimage
-if map(int, scipy.__version__.split('.')) < (0, 12, 0):
+if tuple(map(int, scipy.__version__.split('.'))) < (0, 12, 0):
     import warnings
     warnings.simplefilter("ignore", np.ComplexWarning)
 
@@ -48,7 +49,7 @@ def load_cnn(modelfile, modelvars=None):
     if modelfile.endswith('.h5'):
         import h5py
         with h5py.File(modelfile, 'r') as f:
-            params = {k: f[k].value for k in f.keys()}
+            params = {k: v[...] for k, v in f.items()}
     else:
         f = np.load(modelfile)
         params = {k: f[k] for k in f.files}
@@ -297,7 +298,7 @@ def pad_data(block, pad_left, pad_right):
     return out
 
 def predict(spect, modelfile, stdfile):
-    with open(modelfile + '.vars', 'rb') as f:
+    with io.open(modelfile + '.vars', 'r') as f:
         modelvars = dict(l.rstrip('\r\n').split('=') for l in f if l.rstrip('\r\n'))
     blocklen = int(modelvars.get('spect.blocksize', 115))
 
@@ -309,7 +310,7 @@ def predict(spect, modelfile, stdfile):
     # z-scoring
     if stdfile:
         with h5py.File(stdfile, 'r') as f:
-            stdmean = {k: v.value for k, v in f.iteritems()}
+            stdmean = {k: v[...] for k, v in f.items()}
         spect -= stdmean['mean'].ravel()
         spect /= stdmean['std'].ravel()
 

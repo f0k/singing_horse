@@ -32,10 +32,10 @@ VMIN = -14
 VMAX = .5
 
 def print_usage():
-    print 'Converts between audio files and spectrograms as .png or .npy.'
-    print 'Usage: %s INFILE OUTFILE' % sys.argv[0]
-    print '  INFILE: audio file, .npy spectrogram or .png spectrogram'
-    print '  OUTFILE: audio file, .npy spectrogram or .png spectrogram'
+    print('Converts between audio files and spectrograms as .png or .npy.')
+    print('Usage: %s INFILE OUTFILE' % sys.argv[0])
+    print('  INFILE: audio file, .npy spectrogram or .png spectrogram')
+    print('  OUTFILE: audio file, .npy spectrogram or .png spectrogram')
 
 
 
@@ -60,7 +60,7 @@ def write_ffmpeg(samples, sample_rate=SAMPLE_RATE, outfile=None, cmd='ffmpeg'):
             "-ar", str(sample_rate), "-ac", "1", "-f", "f32le", "-i", "pipe:0",
             "-f", "mp3", outfile]
     process = subprocess.Popen(call, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    output, err = process.communicate(samples.data)
+    output, err = process.communicate(samples.data.tobytes())
     retcode = process.poll()
     if retcode:
         raise subprocess.CalledProcessError(retcode, call, output=output)
@@ -181,7 +181,7 @@ def undo_stft(spect, hop_size, frame_len=None, unwindow='auto'):
     #win = 1
     if unwindow == 'auto':
         unwindow = (hop_size <= frame_len//2)
-    samples = np.zeros((num_frames - 1) * hop_size + frame_len)
+    samples = np.zeros(int((num_frames - 1) * hop_size) + frame_len)
     if unwindow:
         factors = np.zeros_like(samples)
     for idx, frame in enumerate(spect):
